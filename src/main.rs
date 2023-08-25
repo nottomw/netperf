@@ -3,6 +3,8 @@
 
 use clap::Command;
 use std::env;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::process;
 
 #[derive(Debug)]
@@ -52,8 +54,61 @@ impl NetEngine {
         return NetEngine { config };
     }
 
+    fn start_client(&self) {
+        println!("Client starting...");
+    }
+
+    fn handle_client_connection_thread_fn(mut stream: TcpStream) {
+        let mut buffer = [0u8; 1024];
+
+        loop {
+            match stream.read(&mut buffer) {
+                Ok(0) => return, // Connection closed
+                Ok(n) => {
+                    let request = String::from_utf8_lossy(&buffer[..n]);
+                    println!("RX: {}", request);
+
+                    stream.write_all(b"ACK\n").unwrap();
+                }
+                Err(_) => return,
+            }
+        }
+    }
+
+    fn start_server(&self) {
+        println!("Server starting...");
+
+        // TODO: for now forced TCP, should select one from the config
+
+        let listenAddr = "127.0.0.1:6666";
+        let listener = TcpListener::bind(listenAddr).expect("Failed to bind");
+        println!("Server listening on {}", listenAddr);
+
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    std::thread::spawn(|| {
+                        Self::handle_client_connection_thread_fn(stream);
+                    });
+                }
+
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                }
+            }
+        }
+    }
+
     pub fn run(&self) {
-        println!("Net engine should run, but for now this is just a dummy function...");
+        match self.config.appMode {
+            AppMode::kClient => {
+                self.start_client();
+            }
+
+            AppMode::kServer => {
+                self.start_server();
+            }
+        }
     }
 }
 
