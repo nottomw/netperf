@@ -6,6 +6,8 @@ use std::env;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process;
+use std::sync::Mutex;
+use std::time::Duration;
 
 #[derive(Debug)]
 enum AppMode {
@@ -17,6 +19,84 @@ enum AppMode {
 enum Lay4Mode {
     kTcp,
     kUdp,
+}
+
+// TODO: move raw buffer to separate file
+#[derive(Copy, Clone)]
+struct RawBuffer {
+    buffer: [u8; 4096],
+    len: u32,
+}
+
+impl Default for RawBuffer {
+    fn default() -> Self {
+        RawBuffer {
+            buffer: [0; 4096],
+            len: 0,
+        }
+    }
+}
+
+struct DoubleBuffer {
+    buffer_array: [std::sync::Mutex<RawBuffer>; 2],
+    write_buffer_idx: usize,
+}
+
+impl DoubleBuffer {
+    pub fn new() -> Self {
+        return DoubleBuffer {
+            buffer_array: [
+                Mutex::new(RawBuffer::default()),
+                Mutex::new(RawBuffer::default()),
+            ],
+            write_buffer_idx: 0,
+        };
+    }
+
+    fn getWriteIndex(&self) -> usize {
+        return self.write_buffer_idx;
+    }
+
+    fn getReadIndex(&self) -> usize {
+        if self.write_buffer_idx == 1 {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
+    pub fn getForWrite(&mut self) -> std::sync::MutexGuard<RawBuffer> {
+        let write_idx = self.getWriteIndex();
+        return self.buffer_array[write_idx]
+            .lock()
+            .expect("write lock failed");
+    }
+
+    pub fn getForRead(&self) -> std::sync::MutexGuard<RawBuffer> {
+        let read_idx = self.getReadIndex();
+        return self.buffer_array[read_idx]
+            .lock()
+            .expect("read lock failed");
+    }
+
+    pub fn switch(&mut self) {
+        let _readGuard = self.buffer_array[0].lock();
+        let _writeGuard = self.buffer_array[1].lock();
+
+        match self.write_buffer_idx {
+            0 => {
+                self.write_buffer_idx = 1;
+            }
+
+            1 => {
+                self.write_buffer_idx = 0;
+            }
+
+            _ => {
+                panic!("write_buffer_idx out of bounds");
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -37,7 +117,7 @@ impl Default for UserConfig {
             lay4Mode: Lay4Mode::kTcp,
             packetSize: 65535,
             testTimeSeconds: 0,
-            port: 0,
+            port: 9090,
             ip: String::default(),
         }
     }
@@ -56,6 +136,28 @@ impl NetEngine {
 
     fn start_client(&self) {
         println!("Client starting...");
+
+        let connectAddr = format!("{}:{}", self.config.ip, self.config.port);
+        println!("Connecting to {}...", connectAddr);
+
+        let mut stream = TcpStream::connect(connectAddr).expect("Failed to connect");
+
+        let mut counter = 0;
+        loop {
+            let mut data_to_send = format!("message from client #{}", counter);
+
+            stream
+                .write_all(data_to_send.as_bytes())
+                .expect("stream write failed");
+
+            let mut response = [0u8; 1024];
+            let n = stream.read(&mut response).expect("Read error");
+            let response_text = String::from_utf8_lossy(&response[..n]);
+            println!("RX from server: {}", response_text);
+
+            std::thread::sleep(Duration::from_secs(3));
+            counter += 1;
+        }
     }
 
     fn handle_client_connection_thread_fn(mut stream: TcpStream) {
@@ -66,9 +168,9 @@ impl NetEngine {
                 Ok(0) => return, // Connection closed
                 Ok(n) => {
                     let request = String::from_utf8_lossy(&buffer[..n]);
-                    println!("RX: {}", request);
+                    println!("RX from client: {}", request);
 
-                    stream.write_all(b"ACK\n").unwrap();
+                    stream.write_all(b"ACK").unwrap();
                 }
                 Err(_) => return,
             }
@@ -80,9 +182,10 @@ impl NetEngine {
 
         // TODO: for now forced TCP, should select one from the config
 
-        let listenAddr = "127.0.0.1:6666";
+        let listenAddr = format!("127.0.0.1:{}", self.config.port);
+        println!("Server listening on {}...", listenAddr);
+
         let listener = TcpListener::bind(listenAddr).expect("Failed to bind");
-        println!("Server listening on {}", listenAddr);
 
         for stream in listener.incoming() {
             match stream {
