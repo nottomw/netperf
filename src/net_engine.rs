@@ -5,7 +5,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use super::double_buffer::*;
 use super::user_config::*;
 use std::sync::mpsc;
 
@@ -36,8 +35,12 @@ impl NetEngine {
 
         let mut stream = TcpStream::connect(connectAddr).expect("Failed to connect");
 
-        let mut counter = 0;
-        let mut packet_size_max = 0;
+        println!("Connected, receiving data from server...");
+
+        let mut counter: u64 = 0;
+        let mut packet_size_max: usize = 0;
+        let mut total_bytes_received: usize = 0;
+        let recv_start = std::time::SystemTime::now();
         loop {
             let mut data_from_server: [u8; 4096] = [0; 4096];
             let read_len = stream.read(&mut data_from_server).expect("Read error");
@@ -46,16 +49,43 @@ impl NetEngine {
                 packet_size_max = read_len;
             }
 
-            if read_len > 0 {
-                let data_from_server_text: String =
-                    data_from_server.iter().map(|&c| c as char).collect();
+            total_bytes_received += read_len;
 
-                println!("RX: {}", data_from_server_text);
+            if read_len > 0 {
+                // ignore for now...
+
+                // let data_from_server_text: String =
+                //     data_from_server.iter().map(|&c| c as char).collect();
+
+                // if let Some(data_from_server_text_prefix) = data_from_server_text.get(0..10) {
+                //     println!("RX: {}", data_from_server_text_prefix);
+                // }
             } else if read_len == 0 {
-                println!("Server disconnected, calculating stats...");
+                let recv_end = std::time::SystemTime::now();
+                let recv_total_time_duration = recv_end
+                    .duration_since(recv_start)
+                    .expect("duration_since failed");
+
+                let recv_total_time_ms = recv_total_time_duration.as_millis();
+
+                println!("\n\nServer disconnected, calculating stats...");
                 println!("\tReceived {} packets...", counter);
                 println!("\tMax packet size: {}", packet_size_max);
-                // TODO: print stats here?
+                println!("\tTotal bytes received: {}", total_bytes_received);
+                println!("\tTotal receive time: {} ms", recv_total_time_ms);
+
+                let recv_total_time_s = recv_total_time_duration.as_secs();
+                let total_kbytes_received = total_bytes_received / 1024;
+                let total_mbytes_received = total_kbytes_received / 1024;
+                let bandwidth_bps = total_bytes_received as f64 / recv_total_time_s as f64;
+                let bandwidth_kbps = total_kbytes_received as f64 / recv_total_time_s as f64;
+                let bandwidth_mbps = total_mbytes_received as f64 / recv_total_time_s as f64;
+                println!(
+                    "\tBandwidth: {} bps, {} kbps, {} mbps",
+                    bandwidth_bps as u32, bandwidth_kbps as u32, bandwidth_mbps as u32
+                );
+                // TODO(twi): this should be around 20 Gbps?
+
                 break;
             }
 
@@ -64,9 +94,10 @@ impl NetEngine {
     }
 
     fn server_data_producer_thread(channel_sender: std::sync::mpsc::Sender<[char; 4096]>) {
-        for i in 1..10 {
+        let packets_to_send = 100_000;
+        for i in 1..(packets_to_send + 1) {
             // For now a simple buffer content, maybe something more complicated later...
-            let chr = std::char::from_digit(i, 10);
+            let chr = std::char::from_digit(i % 10, 10);
             if let Some(character) = chr {
                 let buf_to_send: [char; 4096] = [character; 4096];
                 channel_sender
@@ -84,8 +115,6 @@ impl NetEngine {
             let data_to_send_res = channel_receiver.recv();
             match data_to_send_res {
                 Ok(data_to_send) => {
-                    println!("Sending data: {}", data_to_send[0]);
-
                     let data_to_send_bytes: Vec<u8> =
                         data_to_send.iter().map(|&c| c as u8).collect();
 
@@ -115,6 +144,8 @@ impl NetEngine {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
+                    println!("New client connected, producing data...");
+
                     let (sender, receiver) = std::sync::mpsc::channel();
 
                     let producer_thread = std::thread::spawn(|| {

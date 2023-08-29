@@ -1,7 +1,6 @@
 #![allow(non_snake_case)] // shut up about snake/camel for now
 #![allow(non_camel_case_types)]
 
-mod double_buffer;
 mod net_engine;
 mod user_config;
 
