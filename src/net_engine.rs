@@ -148,16 +148,18 @@ impl NetEngine {
 
                     let (sender, receiver) = std::sync::mpsc::channel();
 
-                    let producer_thread = std::thread::spawn(|| {
+                    let thread_builder_1 = std::thread::Builder::new().stack_size(8 * 1024 * 1024); // 8 MB
+                    let producer_thread = thread_builder_1.spawn(|| {
                         Self::server_data_producer_thread(sender);
                     });
 
-                    let client_handler_thread = std::thread::spawn(|| {
+                    let thread_builder_2 = std::thread::Builder::new().stack_size(8 * 1024 * 1024); // 8 MB
+                    let client_handler_thread = thread_builder_2.spawn(|| {
                         Self::server_handle_client_thread(stream, receiver);
                     });
 
-                    producer_thread.join().unwrap();
-                    client_handler_thread.join().unwrap();
+                    producer_thread.unwrap().join().unwrap();
+                    client_handler_thread.unwrap().join().unwrap();
 
                     // break if the threads joined - all done
                     break;
