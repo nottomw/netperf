@@ -5,11 +5,8 @@ mod double_buffer;
 mod net_engine;
 mod user_config;
 
-use clap::Command;
-use std::env;
-use std::process;
+use clap;
 
-use double_buffer::*;
 use net_engine::*;
 use user_config::*;
 
