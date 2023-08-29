@@ -23,14 +23,7 @@ impl NetEngine {
         };
     }
 
-    fn data_producer_thread(&mut self) {
-        loop {
-            // - wait for produce request
-            // - produce data to write buffer
-        }
-    }
-
-    fn start_client(&self) {
+    fn client_start(&self) {
         println!("Client starting...");
 
         let connectAddr = format!("{}:{}", self.config.ip, self.config.port);
@@ -56,7 +49,14 @@ impl NetEngine {
         }
     }
 
-    fn handle_client_connection_thread_fn(mut stream: TcpStream) {
+    fn server_data_producer_thread(&mut self) {
+        loop {
+            // - wait for produce request
+            // - produce data to write buffer
+        }
+    }
+
+    fn server_handle_client_thread(mut stream: TcpStream) {
         let mut buffer = [0u8; 1024];
 
         loop {
@@ -79,7 +79,7 @@ impl NetEngine {
         }
     }
 
-    fn start_server(&self) {
+    fn server_start(&self) {
         println!("Server starting...");
 
         // TODO: for now forced TCP, should select one from the config
@@ -93,7 +93,7 @@ impl NetEngine {
             match stream {
                 Ok(stream) => {
                     std::thread::spawn(|| {
-                        Self::handle_client_connection_thread_fn(stream);
+                        Self::server_handle_client_thread(stream);
                     });
                 }
 
@@ -107,11 +107,11 @@ impl NetEngine {
     pub fn run(&self) {
         match self.config.appMode {
             AppMode::kClient => {
-                self.start_client();
+                self.client_start();
             }
 
             AppMode::kServer => {
-                self.start_server();
+                self.server_start();
             }
         }
     }
