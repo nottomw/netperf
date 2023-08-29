@@ -13,6 +13,14 @@ pub struct NetEngine {
     config: UserConfig,
 }
 
+// TODO: actually send this in each packet
+// Sent in each packet
+struct NetEngineMetadata {
+    send_timestamp: u64,
+    recv_timestamp: u64,
+    sequence_no: u64,
+}
+
 impl NetEngine {
     pub fn new(config: UserConfig) -> Self {
         println!("{:?}", config);
@@ -39,7 +47,6 @@ impl NetEngine {
             }
 
             if read_len > 0 {
-                // let data_from_server_text = String::from_utf8_lossy(&data_from_server[..read_len]);
                 let data_from_server_text: String =
                     data_from_server.iter().map(|&c| c as char).collect();
 
