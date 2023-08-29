@@ -5,24 +5,28 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use super::double_buffer::*;
 use super::user_config::*;
 
 pub struct NetEngine {
     config: UserConfig,
-    // q: Vec<RawBuffer>,std::Vector
+    double_buffer: DoubleBuffer,
 }
 
 impl NetEngine {
     pub fn new(config: UserConfig) -> Self {
         println!("{:?}", config);
 
-        return NetEngine { config: config };
+        return NetEngine {
+            config: config,
+            double_buffer: DoubleBuffer::new(),
+        };
     }
 
     fn data_producer_thread(&mut self) {
         loop {
-            // - write data to some queue
-            // - wait until data from queue consumed (producer trigger?)
+            // - wait for produce request
+            // - produce data to write buffer
         }
     }
 
@@ -56,6 +60,12 @@ impl NetEngine {
         let mut buffer = [0u8; 1024];
 
         loop {
+            // - signal producer to start
+            // - wait until first packet produced
+            // - switch double buffers
+            // - signal producer to start again
+            // - send the produced data
+
             match stream.read(&mut buffer) {
                 Ok(0) => return, // Connection closed
                 Ok(n) => {
