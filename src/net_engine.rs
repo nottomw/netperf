@@ -16,6 +16,7 @@ pub struct NetEngine {
 // Sent in each packet
 struct NetEngineMetadata {
     send_timestamp: u64,
+    recv_timestamp: u64,
     sequence_no: u64,
 }
 
