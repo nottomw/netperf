@@ -84,7 +84,7 @@ impl NetEngine {
                     "\tBandwidth: {} bps, {} kbps, {} mbps",
                     bandwidth_bps as u32, bandwidth_kbps as u32, bandwidth_mbps as u32
                 );
-                // TODO(twi): this should be around 20 Gbps?
+                // TODO: this should be around 20 Gbps?
 
                 break;
             }
